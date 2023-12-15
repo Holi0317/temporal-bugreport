@@ -8,6 +8,7 @@ readme = "README.md"
 [tool.poetry.dependencies]
 python = "^3.12"
 temporalio = {extras = ["opentelemetry"], version = "^1.4.0"}
+opentelemetry-exporter-otlp-proto-grpc = "^1.21.0"
 
 
 [build-system]

@@ -2,8 +2,10 @@ import asyncio
 from datetime import timedelta
 
 from opentelemetry import trace
+from opentelemetry.exporter.otlp.proto.grpc.trace_exporter import OTLPSpanExporter
 from opentelemetry.sdk.resources import SERVICE_NAME, Resource
 from opentelemetry.sdk.trace import TracerProvider
+from opentelemetry.sdk.trace.export import BatchSpanProcessor
 from temporalio import activity, workflow
 from temporalio.client import Client
 from temporalio.contrib.opentelemetry import TracingInterceptor
@@ -15,15 +17,30 @@ from temporalio.worker import Worker
 class GreetingWorkflow:
     @workflow.run
     async def run(self, name: str) -> str:
-        return await workflow.execute_activity(
+        await workflow.execute_activity(
             compose_greeting,
             name,
             start_to_close_timeout=timedelta(seconds=10),
         )
 
+        await workflow.execute_activity(
+            compose_greeting,
+            name,
+            start_to_close_timeout=timedelta(seconds=10),
+        )
+
+        return ""
+
 
 @activity.defn
 async def compose_greeting(name: str) -> str:
+    span = trace.get_current_span()
+    print(
+        "Hello in activity. Let's check the traces",
+        trace.format_trace_id(span.get_span_context().trace_id),
+        trace.format_span_id(span.get_span_context().span_id),
+    )
+
     return f"Hello, {name}!"
 
 
@@ -33,6 +50,9 @@ interrupt_event = asyncio.Event()
 def init_runtime_with_telemetry() -> Runtime:
     # Setup global tracer for workflow traces
     provider = TracerProvider(resource=Resource.create({SERVICE_NAME: "my-service"}))
+    exporter = OTLPSpanExporter(endpoint="http://localhost:4317", insecure=True)
+    provider.add_span_processor(BatchSpanProcessor(exporter))
+    trace.set_tracer_provider(provider)
     trace.set_tracer_provider(provider)
 
     # Setup SDK metrics to OTel endpoint
